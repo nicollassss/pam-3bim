@@ -1,266 +1,90 @@
-package com.example.sqlitecompose
+/*
+ * Copyright (C) 2023 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.example.diceroller
 
-import android.content.ContentValues
-import android.content.Context
-import android.database.Cursor
-import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.runtime.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.diceroller.ui.theme.DiceRollerTheme
 
 class MainActivity : ComponentActivity() {
-
-    // --- Data model atualizado com "author" ---
-    data class Note(
-        val id: Long? = null,
-        val title: String,
-        val content: String,
-        val author: String
-    )
-
-    // --- Helper SQLite atualizado ---
-    class DBHelper(context: Context) :
-        SQLiteOpenHelper(context, "app.db", null, 2) { // Versão incrementada para migração
-
-        override fun onCreate(db: SQLiteDatabase) {
-            db.execSQL(
-                """
-                CREATE TABLE notes(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    author TEXT NOT NULL
-                )
-                """.trimIndent()
-            )
-        }
-
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            db.execSQL("DROP TABLE IF EXISTS notes")
-            onCreate(db)
-        }
-
-        fun insertNote(note: Note): Long {
-            val cv = ContentValues().apply {
-                put("title", note.title)
-                put("content", note.content)
-                put("author", note.author)
-            }
-            return writableDatabase.insert("notes", null, cv)
-        }
-
-        fun updateNote(note: Note): Int {
-            requireNotNull(note.id) { "ID não pode ser nulo para update" }
-            val cv = ContentValues().apply {
-                put("title", note.title)
-                put("content", note.content)
-                put("author", note.author)
-            }
-            return writableDatabase.update(
-                "notes",
-                cv,
-                "id=?",
-                arrayOf(note.id.toString())
-            )
-        }
-
-        fun deleteNote(id: Long): Int {
-            return writableDatabase.delete(
-                "notes",
-                "id=?",
-                arrayOf(id.toString())
-            )
-        }
-
-        fun getAllNotes(): List<Note> {
-            val list = mutableListOf<Note>()
-            val c: Cursor = readableDatabase.rawQuery(
-                "SELECT id, title, content, author FROM notes ORDER BY id DESC",
-                null
-            )
-            c.use { cur ->
-                val idIdx = cur.getColumnIndexOrThrow("id")
-                val titleIdx = cur.getColumnIndexOrThrow("title")
-                val contentIdx = cur.getColumnIndexOrThrow("content")
-                val authorIdx = cur.getColumnIndexOrThrow("author")
-                while (cur.moveToNext()) {
-                    list.add(
-                        Note(
-                            id = cur.getLong(idIdx),
-                            title = cur.getString(titleIdx),
-                            content = cur.getString(contentIdx),
-                            author = cur.getString(authorIdx)
-                        )
-                    )
-                }
-            }
-            return list
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = DBHelper(this)
-
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
-                    NotesScreen(dbHelper = db)
-                }
-            }
-        }
-    }
-
-    // --- UI Compose + lógica CRUD com campo "author" ---
-    @OptIn(ExperimentalMaterial3Api::class)
-    @Composable
-    private fun NotesScreen(dbHelper: DBHelper) {
-        var notes by remember { mutableStateOf(dbHelper.getAllNotes()) }
-
-        var title by remember { mutableStateOf(TextFieldValue("")) }
-        var content by remember { mutableStateOf(TextFieldValue("")) }
-        var author by remember { mutableStateOf(TextFieldValue("")) }
-
-        var editingId by remember { mutableStateOf<Long?>(null) }
-
-        fun clearFields() {
-            title = TextFieldValue("")
-            content = TextFieldValue("")
-            author = TextFieldValue("")
-            editingId = null
-        }
-
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(if (editingId == null) "Notas (SQLite + Compose)" else "Editando #$editingId")
-                    }
-                )
-            }
-        ) { padding ->
-            Column(
-                Modifier
-                    .padding(padding)
-                    .padding(16.dp)
-                    .fillMaxSize()
-            ) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Título") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text("Conteúdo") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = author,
-                    onValueChange = { author = it },
-                    label = { Text("Autor") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(12.dp))
-
-                Row {
-                    Button(
-                        onClick = {
-                            val t = title.text.trim()
-                            val c = content.text.trim()
-                            val a = author.text.trim()
-
-                            if (t.isEmpty() || c.isEmpty() || a.isEmpty()) return@Button
-
-                            if (editingId == null) {
-                                dbHelper.insertNote(Note(title = t, content = c, author = a))
-                            } else {
-                                dbHelper.updateNote(Note(id = editingId, title = t, content = c, author = a))
-                            }
-                            notes = dbHelper.getAllNotes()
-                            clearFields()
-                        }
-                    ) {
-                        Text(if (editingId == null) "Salvar" else "Atualizar")
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = { clearFields() }) {
-                        Text("Limpar")
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
-                Spacer(Modifier.height(8.dp))
-
-                LazyColumn(
+            DiceRollerTheme {
+                Surface(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    color = MaterialTheme.colorScheme.background
                 ) {
-                    items(notes, key = { it.id ?: -1 }) { note ->
-                        NoteItem(
-                            note = note,
-                            onClick = {
-                                editingId = note.id
-                                title = TextFieldValue(note.title)
-                                content = TextFieldValue(note.content)
-                                author = TextFieldValue(note.author)
-                            },
-                            onDelete = { id ->
-                                dbHelper.deleteNote(id)
-                                notes = dbHelper.getAllNotes()
-                                if (editingId == id) clearFields()
-                            }
-                        )
-                        Divider()
-                    }
+                    DiceRollerApp()
                 }
             }
         }
     }
+}
 
-    @Composable
-    private fun NoteItem(
-        note: Note,
-        onClick: () -> Unit,
-        onDelete: (Long) -> Unit
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .clickable { onClick() }
+@Preview
+@Composable
+fun DiceRollerApp() {
+    DiceWithButtonAndImage(modifier = Modifier
+        .fillMaxSize()
+        .wrapContentSize(Alignment.Center)
+    )
+}
+
+@Composable
+fun DiceWithButtonAndImage(modifier: Modifier = Modifier) {
+    var result by remember { mutableStateOf( 1) }
+    val imageResource = when(result) {
+        1 -> R.drawable.dice_1
+        2 -> R.drawable.dice_2
+        3 -> R.drawable.dice_3
+        4 -> R.drawable.dice_4
+        5 -> R.drawable.dice_5
+        else -> R.drawable.dice_6
+    }
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(painter = painterResource(imageResource), contentDescription = result.toString())
+        
+        Button(
+            onClick = { result = (1..6).random() },
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = note.title, style = MaterialTheme.typography.titleMedium)
-                if (note.id != null) {
-                    TextButton(onClick = { onDelete(note.id) }) {
-                        Text("Excluir")
-                    }
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(text = note.content, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
-            Text(text = "Autor: ${note.author}", style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(R.string.roll), fontSize = 24.sp)
         }
     }
 }
